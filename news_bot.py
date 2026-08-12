@@ -136,12 +136,12 @@ def ask_gemini(headlines_text):
         "2. ...\n3. ...\n4. ...\n5. ...\n\n"
         "====================\n"
         "Tong hop tu dong - HN x Reddit x GNews\n\n"
-        "CRITICAL: Write ALL 10 stories completely with 3 full Vietnamese sentences each. Do not stop early."
+        "CRITICAL: You MUST write all 10 stories. Number them 1 through 10. Each story needs 3 full Vietnamese sentences. Do not summarize or skip any story. Do not write "..." or placeholders. Complete all 10 before stopping."
     )
 
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.5}
+        "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.5}
     }).encode("utf-8")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_KEY}"
