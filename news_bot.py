@@ -32,7 +32,18 @@ def fetch_hackernews(limit=40):
         return []
 
 # ── Reddit ────────────────────────────────────────────────────────────────
-SUBREDDITS = ["MachineLearning", "artificial", "programming", "FlutterDev", "iOSProgramming", "androiddev", "startups"]
+SUBREDDITS = [
+    "MachineLearning",
+    "artificial",
+    "LocalLLaMA",
+    "LangChain",
+    "ChatGPT",
+    "FlutterDev",
+    "programming",
+    "iOSProgramming",
+    "androiddev",
+    "startups",
+]
 
 def fetch_reddit(subreddit, limit=5):
     url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit={limit}"
@@ -60,7 +71,12 @@ def fetch_all_reddit():
     return all_posts
 
 # ── Google News ───────────────────────────────────────────────────────────
-VN_TOPICS = ["Vietnam technology startup 2026", "cong nghe Viet Nam 2026"]
+VN_TOPICS = [
+    "AI agent workflow automation 2026",
+    "agentic AI multi-agent LLM 2026",
+    "Flutter development 2026",
+    "Vietnam technology startup 2026",
+]
 
 def fetch_rss(query):
     encoded = urllib.parse.quote(query)
@@ -86,50 +102,57 @@ def parse_titles(xml, limit=5):
     return titles
 
 def fetch_google_news():
-    print("  [GoogleNews] Dang lay tin Viet Nam...")
+    print("  [GoogleNews] Dang lay tin...")
     all_titles = []
     for topic in VN_TOPICS:
         xml = fetch_rss(topic)
         titles = parse_titles(xml, limit=5)
         all_titles.extend(titles)
-        print(f"  [GoogleNews] '{topic[:30]}' -> {len(titles)} headlines")
-    return [f"[VN News] {t}" for t in all_titles]
+        print(f"  [GoogleNews] '{topic[:35]}' -> {len(titles)} headlines")
+    return [f"[GNews] {t}" for t in all_titles]
 
 # ── Gemini ────────────────────────────────────────────────────────────────
 def ask_gemini(headlines_text, today):
     prompt = "\n".join([
-        "You are a Vietnamese tech news curator.",
-        "Below are today's trending stories (" + today + ") from HackerNews, Reddit, and Vietnam News.",
+        "You are a Vietnamese tech news curator specializing in AI and agents.",
+        "Below are today's trending stories (" + today + ") from HackerNews, Reddit, and Google News.",
         "",
         headlines_text,
         "",
-        "TASK: Write a daily tech report in Vietnamese with EXACTLY 10 stories.",
-        "- Prioritize stories with highest score/upvotes.",
-        "- Prefer topics: AI, coding, mobile dev (Flutter/iOS/Android), Vietnam tech, startups.",
-        "- Each story: title in Vietnamese + 3 full sentences in Vietnamese explaining content and why it matters.",
-        "- Mention the source (HackerNews / Reddit / VN News).",
+        "TASK: Select and write EXACTLY 10 stories for a daily report in Vietnamese.",
+        "",
+        "PRIORITY ORDER when selecting stories (most important first):",
+        "1. AI agents, agentic workflows, multi-agent systems, agent frameworks (HIGHEST priority)",
+        "2. LLM tools, AI models, AI research, AI products",
+        "3. Flutter, cross-platform mobile development, Dart",
+        "4. iOS and Android development",
+        "5. Developer tools, coding tools, software engineering",
+        "6. Vietnam tech news, startups (lowest priority)",
+        "",
+        "Within each priority group, pick stories with highest score/upvotes first.",
         "",
         "FORMAT (follow exactly):",
         "BAO CAO NGAY - " + today,
-        "HACKERNEWS x REDDIT x VN NEWS",
+        "AI AGENTS x FLUTTER x TECH",
         "====================",
         "",
-        "1. [Ten tin bang tieng Viet] (HackerNews)",
-        "[Cau 1. Cau 2. Cau 3.]",
+        "1. [Ten tin bang tieng Viet] (HackerNews/Reddit/GNews)",
+        "[3 cau tom tat bang tieng Viet co dau]",
         "",
-        "2. [Ten tin] (Reddit)",
-        "[Cau 1. Cau 2. Cau 3.]",
+        "2. [Ten tin] (nguon)",
+        "[3 cau]",
         "",
-        "... (continue until story 10)",
+        "(continue for stories 3 through 10)",
         "",
         "====================",
         "Tong hop tu dong - HN x Reddit x GNews",
         "",
-        "RULES:",
-        "- You MUST write stories numbered 1 through 10. All 10. No exceptions.",
-        "- Each story must have 3 complete Vietnamese sentences.",
-        "- Do NOT write placeholders like '...' or stop before story 10.",
+        "STRICT RULES:",
+        "- Write ALL 10 stories numbered 1 to 10. No skipping.",
+        "- Every story must have a Vietnamese title and 3 complete Vietnamese sentences.",
         "- Use proper Vietnamese with full diacritics.",
+        "- Do NOT write placeholders. Write actual content for all 10.",
+        "- Do NOT stop before story 10.",
     ])
 
     body = json.dumps({
@@ -195,9 +218,9 @@ def main():
     print(f"  OK GEMINI ...{GEMINI_KEY[-6:]}")
 
     print("\nDang thu thap tin tuc...")
-    hn      = fetch_hackernews(limit=40)
-    reddit  = fetch_all_reddit()
-    gn      = fetch_google_news()
+    hn     = fetch_hackernews(limit=40)
+    reddit = fetch_all_reddit()
+    gn     = fetch_google_news()
 
     all_titles = hn + reddit + gn
     seen, unique = set(), []
