@@ -6,29 +6,27 @@ import os
 import sys
 from datetime import datetime, timezone, timedelta
 
-# ── Config ──────────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 CHAT_ID        = os.environ.get("CHAT_ID", "")
 GEMINI_KEY     = os.environ.get("GEMINI_KEY", "")
 
 TOPICS = [
-    "AI artificial intelligence agent LLM",
-    "Flutter iOS Android mobile development",
+    "AI artificial intelligence agent LLM 2026",
+    "Flutter iOS Android mobile development 2026",
     "software engineering coding tools 2026",
-    "Vietnam technology startup",
-    "business tech startup funding",
+    "Vietnam technology startup 2026",
+    "business tech startup funding 2026",
 ]
 
-# ── Helpers ──────────────────────────────────────────────────────────────
 def fetch_rss(query):
     encoded = urllib.parse.quote(query)
-    url = f"https://news.google.com/rss/search?q={encoded}&hl=vi&gl=VN&ceid=VN:vi"
+    url = f"https://news.google.com/rss/search?q={encoded}&hl=en&gl=US&ceid=US:en"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             return r.read().decode("utf-8")
     except Exception as e:
-        print(f"  ⚠ RSS error [{query[:20]}]: {e}")
+        print(f"  RSS error: {e}")
         return ""
 
 def parse_titles(xml, limit=5):
@@ -45,33 +43,33 @@ def parse_titles(xml, limit=5):
 
 def ask_gemini(headlines_text):
     today = datetime.now(timezone(timedelta(hours=7))).strftime("%d/%m/%Y")
-    prompt = f"""Duoi day la cac headline tin tuc hom nay ({today}) ve AI, cong nghe, mobile dev, Flutter, iOS, Android, startup Viet Nam:
-
-{headlines_text}
-
-Hay chon 4-5 tin dang chu y nhat va viet thanh bao cao ngan gon bang tieng Viet co dau, de doc tren dien thoai.
-Format:
-
-BAO CAO NGAY - {today}
-AI - TECH - MOBILE - STARTUP
-====================
-
-1. [Tieu de ngan]
-[2-3 cau tom tat, neu ro tai sao quan trong voi dev nguoi Viet]
-
-2. ...
-
-====================
-Tong hop tu dong - Gemini AI
-
-Chi tra ve noi dung bao cao, khong giai thich them."""
+    prompt = (
+        "You are a Vietnamese tech news summarizer. "
+        "Below are today's headlines (" + today + ") about AI, tech, mobile dev, Flutter, iOS, Android, Vietnam startup, business tech.\n\n"
+        + headlines_text +
+        "\n\nInstructions:\n"
+        "1. Pick the 5 most important and interesting stories.\n"
+        "2. Write a daily report IN VIETNAMESE (with full Vietnamese diacritics) that is short and easy to read on mobile.\n"
+        "3. Use exactly this format:\n\n"
+        "BAO CAO NGAY - " + today + "\n"
+        "AI - TECH - MOBILE - STARTUP\n"
+        "====================\n\n"
+        "1. [Tieu de ngan bang tieng Viet]\n"
+        "[2-3 cau tom tat bang tieng Viet day du dau, giai thich tai sao quan trong voi dev Viet Nam]\n\n"
+        "2. [Tieu de]\n"
+        "[Tom tat]\n\n"
+        "(continue for all 5 stories)\n\n"
+        "====================\n"
+        "Tong hop tu dong - Gemini AI\n\n"
+        "IMPORTANT: Write all story titles and summaries in proper Vietnamese with full diacritics. "
+        "Each summary must be 2-3 complete sentences. Do not truncate. Return only the report, nothing else."
+    )
 
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 1000}
+        "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.7}
     }).encode("utf-8")
 
-    # Dùng gemini-2.0-flash — model mới nhất, miễn phí
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_KEY}"
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     try:
@@ -101,29 +99,36 @@ def send_telegram(text):
         print(f"  Telegram HTTP error {e.code}: {e.read().decode()}")
         return False
 
-# ── Main ─────────────────────────────────────────────────────────────────
 def main():
     print("Kiem tra config...")
     if not TELEGRAM_TOKEN: print("TELEGRAM_TOKEN chua set!"); sys.exit(1)
     if not CHAT_ID:        print("CHAT_ID chua set!");        sys.exit(1)
     if not GEMINI_KEY:     print("GEMINI_KEY chua set!");     sys.exit(1)
-    print(f"  OK TELEGRAM_TOKEN: ...{TELEGRAM_TOKEN[-6:]}")
+    print(f"  OK TOKEN: ...{TELEGRAM_TOKEN[-6:]}")
     print(f"  OK CHAT_ID: {CHAT_ID}")
-    print(f"  OK GEMINI_KEY: ...{GEMINI_KEY[-6:]}")
+    print(f"  OK GEMINI: ...{GEMINI_KEY[-6:]}")
 
     print("\nDang lay tin tuc...")
     all_titles = []
     for topic in TOPICS:
         xml = fetch_rss(topic)
-        titles = parse_titles(xml, limit=5)
+        titles = parse_titles(xml, limit=6)
         all_titles.extend(titles)
-        print(f"  {topic[:35]} -> {len(titles)} headlines")
+        print(f"  {topic[:40]} -> {len(titles)} headlines")
 
     if not all_titles:
-        print("Khong lay duoc tin tuc nao!"); sys.exit(1)
+        print("Khong lay duoc tin tuc!"); sys.exit(1)
 
-    headlines_text = "\n".join(f"- {t}" for t in all_titles)
-    print(f"\nTong {len(all_titles)} headlines, dang tom tat bang Gemini 2.0 Flash...")
+    # Deduplicate
+    seen = set()
+    unique_titles = []
+    for t in all_titles:
+        if t not in seen:
+            seen.add(t)
+            unique_titles.append(t)
+
+    headlines_text = "\n".join(f"- {t}" for t in unique_titles)
+    print(f"\nTong {len(unique_titles)} headlines (sau dedup), dang tom tat...")
 
     report = ask_gemini(headlines_text)
     print("\n--- BAO CAO ---")
