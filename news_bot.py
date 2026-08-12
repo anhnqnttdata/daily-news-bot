@@ -72,7 +72,7 @@ Chi tra ve noi dung bao cao, khong giai thich them."""
     }).encode("utf-8")
 
     # Dùng gemini-2.0-flash — model mới nhất, miễn phí
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_KEY}"
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
