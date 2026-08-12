@@ -3,6 +3,7 @@ import urllib.request
 import urllib.parse
 import json
 import os
+import sys
 from datetime import datetime, timezone, timedelta
 
 # ── Config ──────────────────────────────────────────────────────────────
@@ -20,19 +21,17 @@ TOPICS = [
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 def fetch_rss(query):
-    """Dùng Google News RSS để lấy headlines miễn phí."""
     encoded = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded}&hl=vi&gl=VN&ceid=VN:vi"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=15) as r:
             return r.read().decode("utf-8")
     except Exception as e:
-        print(f"RSS error: {e}")
+        print(f"  ⚠ RSS error [{query[:20]}]: {e}")
         return ""
 
 def parse_titles(xml, limit=5):
-    """Trích title từ RSS XML thô."""
     import re
     items = re.findall(r"<item>(.*?)</item>", xml, re.DOTALL)
     titles = []
@@ -45,85 +44,98 @@ def parse_titles(xml, limit=5):
     return titles
 
 def ask_gemini(headlines_text):
-    """Gọi Gemini API (miễn phí) để tóm tắt & chọn insight."""
     today = datetime.now(timezone(timedelta(hours=7))).strftime("%d/%m/%Y")
-    prompt = f"""Dưới đây là các headline tin tức hôm nay ({today}) về AI, công nghệ, mobile dev, Flutter, iOS, Android, startup Việt Nam, business tech:
+    prompt = f"""Duoi day la cac headline tin tuc hom nay ({today}) ve AI, cong nghe, mobile dev, Flutter, iOS, Android, startup Viet Nam:
 
 {headlines_text}
 
-Hãy:
-1. Chọn 4-5 tin đáng chú ý nhất, ưu tiên tin mới và có tác động thực tế.
-2. Viết thành báo cáo ngắn gọn bằng tiếng Việt, dễ đọc trên điện thoại.
-3. Format đúng như sau (dùng emoji, xuống dòng rõ ràng):
+Hay chon 4-5 tin dang chu y nhat va viet thanh bao cao ngan gon bang tieng Viet co dau, de doc tren dien thoai.
+Format:
 
-📰 BÁO CÁO NGÀY — {today}
-🤖 AI · TECH · MOBILE · STARTUP
-━━━━━━━━━━━━━━━━━━━━
+BAO CAO NGAY - {today}
+AI - TECH - MOBILE - STARTUP
+====================
 
-1️⃣ [Tiêu đề ngắn]
-[2-3 câu tóm tắt, nêu rõ tại sao quan trọng với dev/tech người Việt]
+1. [Tieu de ngan]
+[2-3 cau tom tat, neu ro tai sao quan trong voi dev nguoi Viet]
 
-2️⃣ ...
+2. ...
 
-━━━━━━━━━━━━━━━━━━━━
-🔗 Tổng hợp tự động · Gemini AI
+====================
+Tong hop tu dong - Gemini AI
 
-Chỉ trả về nội dung báo cáo, không giải thích thêm."""
+Chi tra ve noi dung bao cao, khong giai thich them."""
 
     body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}]
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 1000}
     }).encode("utf-8")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        result = json.loads(r.read())
-    return result["candidates"][0]["content"]["parts"][0]["text"]
+    # Dùng gemini-2.0-flash — model mới nhất, miễn phí
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            result = json.loads(r.read())
+        return result["candidates"][0]["content"]["parts"][0]["text"]
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        print(f"  Gemini HTTP error {e.code}: {err_body}")
+        raise
+    except Exception as e:
+        print(f"  Gemini error: {e}")
+        raise
 
 def send_telegram(text):
-    """Gửi message qua Telegram Bot API."""
     body = json.dumps({"chat_id": CHAT_ID, "text": text}).encode("utf-8")
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
         data=body,
         headers={"Content-Type": "application/json; charset=utf-8"}
     )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        result = json.loads(r.read())
-    return result.get("ok", False)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            result = json.loads(r.read())
+        return result.get("ok", False)
+    except urllib.error.HTTPError as e:
+        print(f"  Telegram HTTP error {e.code}: {e.read().decode()}")
+        return False
 
 # ── Main ─────────────────────────────────────────────────────────────────
 def main():
-    print("📡 Đang lấy tin tức...")
+    print("Kiem tra config...")
+    if not TELEGRAM_TOKEN: print("TELEGRAM_TOKEN chua set!"); sys.exit(1)
+    if not CHAT_ID:        print("CHAT_ID chua set!");        sys.exit(1)
+    if not GEMINI_KEY:     print("GEMINI_KEY chua set!");     sys.exit(1)
+    print(f"  OK TELEGRAM_TOKEN: ...{TELEGRAM_TOKEN[-6:]}")
+    print(f"  OK CHAT_ID: {CHAT_ID}")
+    print(f"  OK GEMINI_KEY: ...{GEMINI_KEY[-6:]}")
+
+    print("\nDang lay tin tuc...")
     all_titles = []
     for topic in TOPICS:
         xml = fetch_rss(topic)
         titles = parse_titles(xml, limit=5)
         all_titles.extend(titles)
-        print(f"  ✓ {topic[:30]}... → {len(titles)} headlines")
+        print(f"  {topic[:35]} -> {len(titles)} headlines")
 
     if not all_titles:
-        print("❌ Không lấy được tin tức.")
-        return
+        print("Khong lay duoc tin tuc nao!"); sys.exit(1)
 
     headlines_text = "\n".join(f"- {t}" for t in all_titles)
-    print(f"\n📝 Tổng {len(all_titles)} headlines, đang tóm tắt bằng Gemini...")
+    print(f"\nTong {len(all_titles)} headlines, dang tom tat bang Gemini 2.0 Flash...")
 
     report = ask_gemini(headlines_text)
-    print("\n--- BÁO CÁO ---")
+    print("\n--- BAO CAO ---")
     print(report)
     print("---------------\n")
 
-    print("📨 Đang gửi Telegram...")
+    print("Dang gui Telegram...")
     ok = send_telegram(report)
     if ok:
-        print("✅ Gửi thành công!")
+        print("Gui thanh cong!")
     else:
-        print("❌ Gửi thất bại.")
+        print("Gui that bai!"); sys.exit(1)
 
 if __name__ == "__main__":
     main()
