@@ -123,7 +123,7 @@ def ask_gemini(headlines_text):
         "Below are today's trending stories from Hacker News (with score), Reddit (with upvotes), and Google News Vietnam (" + today + ").\n\n"
         + headlines_text +
         "\n\nInstructions:\n"
-        "1. Pick EXACTLY 5 stories with the highest community interest (prioritize high score/upvotes).\n"
+        "1. Pick EXACTLY 10 stories with the highest community interest (prioritize high score/upvotes).\n"
         "2. Prefer stories relevant to: AI, coding tools, mobile dev (Flutter/iOS/Android), Vietnam tech, startups.\n"
         "3. Write a daily report IN VIETNAMESE with full diacritics, easy to read on mobile.\n"
         "4. Mention the source (HackerNews / Reddit / VN News) for each story.\n"
@@ -136,7 +136,7 @@ def ask_gemini(headlines_text):
         "2. ...\n3. ...\n4. ...\n5. ...\n\n"
         "====================\n"
         "Tong hop tu dong - HN x Reddit x GNews\n\n"
-        "CRITICAL: Write ALL 5 stories completely with 3 full Vietnamese sentences each. Do not stop early."
+        "CRITICAL: Write ALL 10 stories completely with 3 full Vietnamese sentences each. Do not stop early."
     )
 
     body = json.dumps({
