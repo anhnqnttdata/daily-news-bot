@@ -29,7 +29,7 @@ def fetch_rss(query):
         print(f"  RSS error: {e}")
         return ""
 
-def parse_titles(xml, limit=5):
+def parse_titles(xml, limit=6):
     import re
     items = re.findall(r"<item>(.*?)</item>", xml, re.DOTALL)
     titles = []
@@ -45,29 +45,34 @@ def ask_gemini(headlines_text):
     today = datetime.now(timezone(timedelta(hours=7))).strftime("%d/%m/%Y")
     prompt = (
         "You are a Vietnamese tech news summarizer. "
-        "Below are today's headlines (" + today + ") about AI, tech, mobile dev, Flutter, iOS, Android, Vietnam startup, business tech.\n\n"
+        "Below are today's headlines (" + today + ") about AI, tech, mobile dev, Flutter, iOS, Android, Vietnam startup.\n\n"
         + headlines_text +
         "\n\nInstructions:\n"
-        "1. Pick the 5 most important and interesting stories.\n"
-        "2. Write a daily report IN VIETNAMESE (with full Vietnamese diacritics) that is short and easy to read on mobile.\n"
+        "1. Pick EXACTLY 5 of the most important stories.\n"
+        "2. Write a daily report IN VIETNAMESE with full diacritics, easy to read on mobile.\n"
         "3. Use exactly this format:\n\n"
         "BAO CAO NGAY - " + today + "\n"
         "AI - TECH - MOBILE - STARTUP\n"
         "====================\n\n"
-        "1. [Tieu de ngan bang tieng Viet]\n"
-        "[2-3 cau tom tat bang tieng Viet day du dau, giai thich tai sao quan trong voi dev Viet Nam]\n\n"
+        "1. [Tieu de bang tieng Viet]\n"
+        "[Viet 3 cau day du bang tieng Viet co dau ve noi dung va ly do quan trong]\n\n"
         "2. [Tieu de]\n"
-        "[Tom tat]\n\n"
-        "(continue for all 5 stories)\n\n"
+        "[3 cau]\n\n"
+        "3. [Tieu de]\n"
+        "[3 cau]\n\n"
+        "4. [Tieu de]\n"
+        "[3 cau]\n\n"
+        "5. [Tieu de]\n"
+        "[3 cau]\n\n"
         "====================\n"
         "Tong hop tu dong - Gemini AI\n\n"
-        "IMPORTANT: Write all story titles and summaries in proper Vietnamese with full diacritics. "
-        "Each summary must be 2-3 complete sentences. Do not truncate. Return only the report, nothing else."
+        "CRITICAL: You MUST write all 5 stories completely. Each summary must be 3 full sentences in Vietnamese. "
+        "Do not stop early. Do not truncate any story."
     )
 
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.7}
+        "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.5}
     }).encode("utf-8")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_KEY}"
@@ -77,36 +82,56 @@ def ask_gemini(headlines_text):
             result = json.loads(r.read())
         return result["candidates"][0]["content"]["parts"][0]["text"]
     except urllib.error.HTTPError as e:
-        err_body = e.read().decode()
-        print(f"  Gemini HTTP error {e.code}: {err_body}")
+        print(f"  Gemini HTTP error {e.code}: {e.read().decode()}")
         raise
     except Exception as e:
         print(f"  Gemini error: {e}")
         raise
 
 def send_telegram(text):
-    body = json.dumps({"chat_id": CHAT_ID, "text": text}).encode("utf-8")
-    req = urllib.request.Request(
-        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-        data=body,
-        headers={"Content-Type": "application/json; charset=utf-8"}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            result = json.loads(r.read())
-        return result.get("ok", False)
-    except urllib.error.HTTPError as e:
-        print(f"  Telegram HTTP error {e.code}: {e.read().decode()}")
-        return False
+    """Chia nho neu bao cao qua 4000 ky tu (gioi han Telegram)."""
+    MAX = 4000
+    chunks = []
+    while text:
+        if len(text) <= MAX:
+            chunks.append(text)
+            break
+        split_at = text.rfind("\n", 0, MAX)
+        if split_at == -1:
+            split_at = MAX
+        chunks.append(text[:split_at])
+        text = text[split_at:].lstrip()
+
+    print(f"  Chia thanh {len(chunks)} phan de gui...")
+    ok = True
+    for i, chunk in enumerate(chunks):
+        body = json.dumps({"chat_id": CHAT_ID, "text": chunk}).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            data=body,
+            headers={"Content-Type": "application/json; charset=utf-8"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                result = json.loads(r.read())
+            if result.get("ok"):
+                print(f"  Phan {i+1}/{len(chunks)} gui OK")
+            else:
+                print(f"  Phan {i+1} that bai: {result}")
+                ok = False
+        except urllib.error.HTTPError as e:
+            print(f"  Telegram HTTP error {e.code}: {e.read().decode()}")
+            ok = False
+    return ok
 
 def main():
     print("Kiem tra config...")
     if not TELEGRAM_TOKEN: print("TELEGRAM_TOKEN chua set!"); sys.exit(1)
     if not CHAT_ID:        print("CHAT_ID chua set!");        sys.exit(1)
     if not GEMINI_KEY:     print("GEMINI_KEY chua set!");     sys.exit(1)
-    print(f"  OK TOKEN: ...{TELEGRAM_TOKEN[-6:]}")
-    print(f"  OK CHAT_ID: {CHAT_ID}")
-    print(f"  OK GEMINI: ...{GEMINI_KEY[-6:]}")
+    print(f"  OK TOKEN ...{TELEGRAM_TOKEN[-6:]}")
+    print(f"  OK CHAT_ID {CHAT_ID}")
+    print(f"  OK GEMINI ...{GEMINI_KEY[-6:]}")
 
     print("\nDang lay tin tuc...")
     all_titles = []
@@ -119,19 +144,17 @@ def main():
     if not all_titles:
         print("Khong lay duoc tin tuc!"); sys.exit(1)
 
-    # Deduplicate
-    seen = set()
-    unique_titles = []
+    seen, unique = set(), []
     for t in all_titles:
         if t not in seen:
             seen.add(t)
-            unique_titles.append(t)
+            unique.append(t)
 
-    headlines_text = "\n".join(f"- {t}" for t in unique_titles)
-    print(f"\nTong {len(unique_titles)} headlines (sau dedup), dang tom tat...")
+    headlines_text = "\n".join(f"- {t}" for t in unique)
+    print(f"\nTong {len(unique)} headlines, dang tom tat...")
 
     report = ask_gemini(headlines_text)
-    print("\n--- BAO CAO ---")
+    print(f"\n--- BAO CAO ({len(report)} ky tu) ---")
     print(report)
     print("---------------\n")
 
