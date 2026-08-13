@@ -3,7 +3,7 @@ name: Daily News Bot
 on:
   schedule:
     # 7:00 sáng giờ Việt Nam = 00:00 UTC
-    - cron: '0 0 * * *'
+    - cron: '45 2 * * *'
   workflow_dispatch:  # chạy thủ công để test
 
 jobs:
