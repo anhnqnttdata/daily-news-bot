@@ -2,13 +2,14 @@ name: Daily News Bot
 
 on:
   schedule:
-    # 7:00 sáng giờ Việt Nam = 00:00 UTC
-    - cron: '0 0 * * *'
-  workflow_dispatch:  # chạy thủ công để test
+    - cron: '0 0 * * *'  # 7h sang gio Viet Nam
+  workflow_dispatch:
 
 jobs:
   send-news:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -25,3 +26,12 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
         run: python news_bot.py
+
+      - name: Keep repo active
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "$(date -u)" > .last_run
+          git add .last_run
+          git diff --staged --quiet || git commit -m "chore: daily run $(date -u +%Y-%m-%d)"
+          git push
